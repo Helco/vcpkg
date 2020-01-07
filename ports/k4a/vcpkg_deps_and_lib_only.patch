@@ -1,0 +1,129 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4967b94c..400899d6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -100,8 +100,25 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL
+     set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+ endif()
+ 
+-# Find all dependencies
+-add_subdirectory(extern)
++# Don't find all dependencies (let vcpkg do this)
++find_package(azure_c_shared_utility CONFIG REQUIRED)
++find_package(spdlog CONFIG REQUIRED)
++find_package(cJSON CONFIG REQUIRED)
++
++# These two really should export the namespaced cmake targets themselves :(
++add_library(azure::aziotsharedutil INTERFACE IMPORTED)
++target_link_libraries(azure::aziotsharedutil INTERFACE aziotsharedutil)
++add_library(cJSON::cJSON INTERFACE IMPORTED)
++target_link_libraries(cJSON::cJSON INTERFACE cjson)
++
++# And LibUSB is the worst of them
++set(LIBUSB_PATH ${VCPKG_CURRENT_INSTALLED_DIR})
++if (${CMAKE_BUILD_TYPE} EQUAL "Debug")
++    set(LIBUSB_PATH ${LIBUSB_PATH}"/debug")
++endif()
++add_library(LibUSB::LibUSB INTERFACE IMPORTED)
++target_link_libraries(LibUSB::LibUSB INTERFACE "${LIBUSB_PATH}/lib/libusb-1.0.lib")
++target_include_directories(LibUSB::LibUSB INTERFACE "${LIBUSB_PATH}/include")
+ 
+ # Don't enable testing until after building dependencies
+ enable_testing()
+@@ -160,10 +177,10 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+     endif()
+ endif()
+ 
+-add_subdirectory(examples)
++#add_subdirectory(examples)
+ add_subdirectory(src)
+-add_subdirectory(tests)
+-add_subdirectory(tools)
++#add_subdirectory(tests)
++#add_subdirectory(tools)
+ 
+ if (K4A_BUILD_DOCS)
+     find_package(Doxygen 1.8.14 EXACT)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 0115577e..337ee7f9 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -22,7 +22,7 @@ add_subdirectory(imu)
+ add_subdirectory(logging)
+ add_subdirectory(math)
+ add_subdirectory(queue)
+-add_subdirectory(record)
++# add_subdirectory(record)
+ add_subdirectory(rwlock)
+ add_subdirectory(sdk)
+ add_subdirectory(tewrapper)
+diff --git a/src/calibration/calibration.c b/src/calibration/calibration.c
+index f046ef20..3d23adae 100644
+--- a/src/calibration/calibration.c
++++ b/src/calibration/calibration.c
+@@ -6,7 +6,7 @@
+ 
+ // Dependent libraries
+ #include <k4ainternal/common.h>
+-#include <cJSON.h>
++#include <cjson/cJSON.h>
+ 
+ // System dependencies
+ #include <stdlib.h>
+diff --git a/src/logging/logging.cpp b/src/logging/logging.cpp
+index 05264c5f..855b7512 100644
+--- a/src/logging/logging.cpp
++++ b/src/logging/logging.cpp
+@@ -20,12 +20,17 @@
+ 
+ // SPDLOG has an ASSERT in an unreachable part of code, which results in a warning
+ // and we are treating warnings as errors.
++// also fmt dll-exports an error class inheriting from std::runtime_error 
+ #ifdef _MSC_VER
+ #pragma warning(disable : 4702)
++#pragma warning(disable : 4275)
+ #endif
+ #include <spdlog/spdlog.h>
++#include <spdlog/sinks/stdout_sinks.h>
++#include <spdlog/sinks/rotating_file_sink.h>
+ #ifdef _MSC_VER
+ #pragma warning(default : 4702)
++#pragma warning(default : 4275)
+ #endif
+ 
+ #ifdef __cplusplus
+diff --git a/src/sdk/CMakeLists.txt b/src/sdk/CMakeLists.txt
+index 3616f400..8ccb9a92 100644
+--- a/src/sdk/CMakeLists.txt
++++ b/src/sdk/CMakeLists.txt
+@@ -110,7 +110,7 @@ install(
+     NAMESPACE
+         k4a::
+     DESTINATION
+-        ${CMAKE_INSTALL_LIBDIR}/cmake/k4a
++        ${CMAKE_INSTALL_PREFIX}/share/k4a
+     COMPONENT
+         development
+ )
+@@ -122,7 +122,7 @@ install(
+         "${CMAKE_CURRENT_BINARY_DIR}/k4aConfig.cmake"
+         "${CMAKE_CURRENT_BINARY_DIR}/k4aConfigVersion.cmake"
+     DESTINATION
+-        ${CMAKE_INSTALL_LIBDIR}/cmake/k4a
++        ${CMAKE_INSTALL_PREFIX}/share/k4a
+     COMPONENT
+         development
+ )
+diff --git a/src/usbcommand/usb_cmd_priv.h b/src/usbcommand/usb_cmd_priv.h
+index 0aa502c9..0e53eb50 100644
+--- a/src/usbcommand/usb_cmd_priv.h
++++ b/src/usbcommand/usb_cmd_priv.h
+@@ -20,7 +20,7 @@
+ #include <azure_c_shared_utility/threadapi.h>
+ 
+ // Exteranl dependencis
+-#include <libusb.h>
++#include <libusb-1.0/libusb.h> // this looks more like a problem of the vcpkg libusb port D:
+ 
+ // Ensure we have LIBUSB_API_VERSION defined if not defined by libusb.h
+ #ifndef LIBUSB_API_VERSION

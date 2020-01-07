@@ -1,0 +1,5 @@
+Source: k4a
+Version: 1.3.0-0
+Homepage: https://github.com/microsoft/Azure-Kinect-Sensor-SDK
+Description: A cross platform (Linux and Windows) user mode SDK to read data from your Azure Kinect device.
+Build-Depends: azure-c-shared-utility, cjson, spdlog, libusb, libjpeg-turbo
